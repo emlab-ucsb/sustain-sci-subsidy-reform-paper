@@ -1,1 +1,1 @@
-# sustinability-science-subsidy-paper
+# sustainability-science-subsidy-paper
