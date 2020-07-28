@@ -2,8 +2,8 @@
 output:
   html_document: default
 
-title: "Paper # 1 - Figures"
-author: "Kat Millage"
+title: "Figure #1 - Ambitious subsidy reform by the WTO presents opportunities for ocean health restoration"
+author: "Christopher Costello, Katherine Millage, Sabrina Eisenbarth, Elsa Galarza, Gakushi Ishimura, Laura Lea Rubino, Vienna Saccomanno, U. Rashid Sumaila, Kent Strauss"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 fontsize: 11pt
 ---
