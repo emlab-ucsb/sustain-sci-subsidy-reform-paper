@@ -102,7 +102,7 @@ effort_binned <- effort_binned_good_fishing_vessels_2018 %>%
                               flag %in% nor_territories ~ "NOR",
                               flag %in% usa_territories ~ "USA",
                               flag %in% aus_territories ~ "AUS",
-                              flag == "COK" ~ "NZL", # for now assign cook islands to new zealand
+                              flag == "COK" ~ "NZL", # for the purposes of subsidy provisioning, assign cook islands to new zealand
                               TRUE ~ flag))
 
 effort_binned$new_flag[effort_binned$new_flag == "GCA"] <- "GTM"
@@ -474,6 +474,12 @@ ggsave(paste0(results_dir, "subsidy_intensity_fuel_map.png"), dpi = 200, width =
 
 ## Stock status 
 
+### RAM Stocks Only
+
+[NEED]
+
+### Upsides Database 
+
 Now we load the upsides database, calculate mean and median F/Fmsy by FAO region, and plot. 
 
 ```{r}
@@ -489,7 +495,7 @@ upsides_region <- upsides_dat %>%
   rename(fao_region = region_fao_split)
 ```
 
-### F/Fmsy by Region
+#### F/Fmsy by Region
 
 ```{r, fig.width=4, fig.height=7}
 # Fmsy (region)
@@ -514,7 +520,7 @@ F_Fmsy_region_l <- MapMaker(data = upsides_region,
 F_Fmsy_region_l[["all"]]
 ```
 
-### B/Bmsy by Region
+#### B/Bmsy by Region
 
 ```{r, fig.width=4, fig.height=7}
 # B/Bmsy (region)
