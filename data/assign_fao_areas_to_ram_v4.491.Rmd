@@ -1,0 +1,336 @@
+---
+title: "Assign FAO Areas to stocks in the RAM Legacy Stock Assessment Database (v4.491)"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Load packages
+library(knitr) 
+library(countrycode) # country name matching
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+
+# Path to raw RAM .Rdata
+ram_dat_path <- "./RAM v4.491 Files (1-14-20)/RAM v4.491/DB Files With Assessment Data/R Data/DBdata[asmt][v4.491].RData"
+
+# Load RAM data
+load(ram_dat_path)
+
+# Get relevant metadata to start assigning FAO regions
+ram_stocks_spatial_areas <- stock %>%
+  dplyr::select(stockid, 
+                stocklong,
+                areaid, 
+                region) %>%
+  left_join(area %>% dplyr::select(areaid, areaname, country), by = "areaid") %>%
+  left_join(metadata %>% dplyr::select(stockid, primary_FAOarea), by = "stockid") %>%
+  arrange(country)
+
+```
+
+## Assign FAO areas based on "region"
+
+Though the RAM database now has a "primary FAO area" attribute associated with many of the entries, it's worth making our own lookup table to make sure they match up. We will also want to correct these for the multinational stocks.
+
+We start by using the "region" attribute. For some, this will be enough to determine the relevant FAO area. For others it will not, and we will need to assign the relevant FAO area based on another arribute. 
+
+```{r cars}
+ram_fao_by_region <- ram_stocks_spatial_areas %>%
+  distinct(region) %>%
+  mutate(region_fao_area = case_when(region == "South America" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "Australia" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "Canada East Coast" ~ "21",
+                                     region == "Canada West Coast" ~ "67",
+                                     region == "Canada West Coast (Pacific Salmon)" ~ "2",
+                                     region == "Other" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "Japan" ~ "61",
+                                     region == "Russia Japan (Pacific Salmon)" ~ "4",
+                                     region == "Indian Ocean" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "Mediterranean-Black Sea" ~ "37",
+                                     region == "Atlantic Ocean" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "Pacific Ocean" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "European Union" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "West Africa" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "Europe non EU" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "US Alaska" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "New Zealand" ~ "81",
+                                     region == "South Africa" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "US East Coast" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "US West Coast" ~ "NA", # Not sufficienct to determine FAO area
+                                     region == "US Southeast and Gulf" ~ "31",
+                                     region == "US Alaska (Pacific Salmon)" ~ "2",
+                                     region == "US West Coast (Pacific Salmon)" ~ "2",
+                                     TRUE ~ "NA")) %>%
+  dplyr::filter(region_fao_area != "NA")
+```
+
+## Assign FAO areas based on "country"
+
+For instances where region was not enough, we now consider country. 
+
+```{r}
+ram_fao_by_country <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  distinct(country) %>%
+  mutate(country_fao_area = case_when(country == "Argentina" ~ "41",
+                                      country == "Australia" ~ "NA", # Not sufficienct to determine FAO area
+                                      country == "Chile" ~ "87",
+                                      country == "Iran" ~ "4",
+                                      country == "multinational" ~ "NA", # Not sufficienct to determine FAO area
+                                      country == "Multinational" ~ "NA", # Not sufficienct to determine FAO area
+                                      country == "Peru" ~ "87",
+                                      country == "Russia" ~ "NA", # Not sufficienct to determine FAO area
+                                      country == "South Africa" ~ "NA", # Not sufficienct to determine FAO area
+                                      country == "USA" ~ "NA", # Not sufficienct to determine FAO area
+                                      TRUE ~ "NA")) %>%
+  dplyr::filter(country_fao_area != "NA")
+```
+
+## Assign FAO areas based on "areaname"
+
+For instances where region and country were not enough, we now consider "areaname". Let's break it apart by country to make it a bit more feasible. In some cases it's necessary to reference the specific stock names to better assign regions. 
+
+### Australia
+
+```{r}
+ram_fao_by_areaname_australia <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country == "Australia") %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "New South Wales to Western Australia" ~ "57;81",
+                                       areaname == "Southeast Australia" ~ "57;81",
+                                       areaname == "Northern Australia" ~ "57;71",
+                                       areaname == "Eastern half of Southeast Australia" ~ "81",
+                                       areaname == "Western half of Southeast Australia" ~ "57",
+                                       areaname == "Queensland and New South Wales" ~ "71;81",
+                                       areaname == "Cascade Plateau" ~ "81", # might include a small part of 57
+                                       areaname == "Macquarie Island" ~ "81",
+                                       areaname == "Eastern Australia" ~ "57",
+                                       areaname == "South Australia Northern Zone" ~ "57",
+                                       areaname == "South Australia Southern Zone" ~ "57",
+                                       areaname == "Northern Spencer Gulf" ~ "57",
+                                       areaname == "Southern Gulf St. Vincent" ~ "57",
+                                       areaname == "Southern Spencer Gulf" ~ "57",
+                                       areaname == "Tasmania" ~ "57",
+                                       TRUE ~ "57;71;81")) # For future/historical stocks, do all three
+```
+
+### Multinational
+
+This one will need further splitting apart
+
+```{r}
+multinational_countries <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country %in% c("multinational", "Multinational")) %>%
+  distinct(region, country)
+```
+
+#### Europe
+
+```{r}
+ram_fao_by_areaname_multinational_europe <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country %in% c("multinational", "Multinational")) %>%
+  dplyr::filter(region %in% c("Europe non EU", "European Union")) %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "Azores" ~ "27;34", # crosses both
+                                       areaname == "NAFO 1f and ICES 14" ~ "21;27", # crosses both
+                                       areaname == "ICES 5-12-14 and NAFO Subareas 1-2 (deep)" ~ "21;27",
+                                       areaname == "ICES 5-12-14 and NAFO Subareas 1-2 (shallow)" ~ "21;27",
+                                       areaname == "Azores Grounds" ~ "27;34",
+                                       areaname == "Mid-Atlantic Ridge" ~ "27", # check on this one
+                                       TRUE ~ "27")) # Otherwise we assume it's 27
+```
+
+#### South America
+
+```{r}
+ram_fao_by_areaname_multinational_south_america <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country %in% c("multinational", "Multinational")) %>%
+  dplyr::filter(region %in% c("South America")) %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "Chile" ~ "87",
+                                       areaname == "Chilean EEZ and offshore" ~ "87",
+                                       areaname == "South Chile Argentina" ~ "41;87",
+                                       TRUE ~ "41;87"))
+
+```
+
+#### West Africa
+```{r}
+ram_fao_areaname_multinational_west_africa <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country %in% c("multinational", "Multinational")) %>%
+  dplyr::filter(region %in% c("West Africa")) %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "West Africa" ~ "34", # small pelagics and crustaceans
+                                       areaname == "West Africa Subgroup 1" ~ "34",
+                                       areaname == "West Africa Subgroup 2" ~ "34",
+                                       areaname == "West Africa Subgroup 3" ~ "34;47",
+                                       areaname == "West Africa Zone A+B" ~ "34",
+                                       areaname == "West Africa Zone C" ~ "34",
+                                       TRUE ~ "34"))
+```
+
+#### US Alaska
+
+```{r}
+ram_fao_areaname_multinational_alaska <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country %in% c("multinational", "Multinational")) %>%
+  dplyr::filter(region %in% c("US Alaska")) %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "North Pacific" ~ "61;67", 
+                                       TRUE ~ "61;67"))
+```
+
+#### Ocean basins and other
+
+```{r}
+ram_fao_by_areaname_multinational_oceans <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country %in% c("multinational", "Multinational")) %>%
+  dplyr::filter(region %in% c("Atlantic Ocean", "Indian Ocean", "Pacific Ocean", "Other")) %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "Indian Ocean" ~ "51;57",
+                                       areaname == "Northern Atlantic" ~ "21;27;31;34", 
+                                       areaname == "South Atlantic" ~ "34;41;47", 
+                                       areaname == "South Pacific Ocean	" ~ "71;77;81;87", 
+                                       areaname == "Eastern Atlantic" & stocklong == "Atlantic bluefin tuna Eastern Atlantic" ~ "27;37;34;47",
+                                       areaname == "Eastern Atlantic" ~ "27;34;47",
+                                       areaname == "Western Atlantic" ~ "21;31;41",
+                                       areaname == "Ross Sea" ~ "88",
+                                       areaname == "Atlantic Ocean" ~ "21;27;31;34;41;47", 
+                                       areaname == "Central Western Pacific Ocean" ~ "61;67;71;77;81", 
+                                       areaname == "Eastern Pacific" ~ "67;77;81;87",
+                                       areaname == "Southern Oceans" ~ "48;58;88", # Actually extends up higher
+                                       areaname == "Nothwest Pacific Ocean" ~ "61",
+                                       areaname == "Northeast Pacific" ~ "77;87",
+                                       areaname == "Western Pacific Ocean" ~ "71;81", # should be SW
+                                       areaname == "North Pacific Ocean" ~ "61;67;71;77",
+                                       areaname == "Pacific Ocean" ~ "61;67;71;77;81;87",
+                                       areaname == "Western and Central North Pacific" ~ "61;71;67;77",
+                                       areaname == "South Pacific Ocean" ~ "71;77;81;87",
+                                       
+                                       TRUE ~ "NA"))
+```
+
+#### Combine Multinational 
+
+```{r}
+ram_fao_by_areaname_multinational <- ram_fao_by_areaname_multinational_europe %>%
+  bind_rows(ram_fao_by_areaname_multinational_south_america) %>%
+  bind_rows(ram_fao_areaname_multinational_west_africa) %>%
+  bind_rows(ram_fao_areaname_multinational_alaska) %>%
+  bind_rows(ram_fao_by_areaname_multinational_oceans)
+```
+
+### Russia
+
+```{r}
+ram_fao_by_areaname_russia <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country == "Russia") %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = "61")
+```
+
+### South Africa
+
+```{r}
+ram_fao_by_areaname_south_africa <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country == "South Africa") %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "South Africa Areas 1-2" ~ "47",
+                                       areaname == "South Africa Areas 3-4" ~ "47",
+                                       areaname == "South Africa Areas 5-6" ~ "47",
+                                       areaname == "South Africa Area 7" ~ "47",
+                                       areaname == "South Africa Area 8" ~ "47",
+                                       areaname == "South Africa South coast" ~ "47",
+                                       areaname == "South Africa Subantarctic Prince Edward Islands" ~ "51;58",
+                                       areaname == "South Africa" ~ "47;51",
+                                       TRUE ~ "47;51"))
+```
+
+### USA
+
+```{r}
+ram_fao_by_areaname_usa <- ram_stocks_spatial_areas %>%
+  anti_join(ram_fao_by_region, by = "region") %>%
+  dplyr::filter(country == "USA") %>%
+  distinct(country, region, areaname, stocklong) %>%
+  mutate(areaname_fao_area = case_when(areaname == "Gulf of Maine / Georges Bank" ~ "21",
+                                       areaname == "Bering Sea and Aleutian Islands" ~ "61;67",
+                                       areaname == "Gulf of Alaska" ~ "67",
+                                       areaname == "Pacific Coast" ~ "67;77", # check
+                                       areaname == "Mid-Atlantic Coast" ~ "21;31", # check
+                                       areaname == "Chesapeake Bay" ~ "21",
+                                       areaname == "Pribilof Islands" ~ "67",
+                                       areaname == "Saint Matthews Island" ~ "67",
+                                       areaname == "California" ~ "67;77", # barely goes into 67
+                                       areaname == "Northern Pacific Coast" ~ "67", # check
+                                       areaname == "Oregon Coast" ~ "67",
+                                       areaname == "Southern Pacific Coast" ~ "77",
+                                       areaname == "Washington" ~ "67",
+                                       areaname == "Atlantic Coast" ~ "21;31",
+                                       areaname == "Gulf of Maine / Georges Bank-Southern New England" ~ "21",
+                                       areaname == "Gulf of Maine / Cape Hatteras" ~ "21",
+                                       areaname == "Northern California" ~ "67;77",
+                                       areaname == "Southern California" ~ "77",
+                                       areaname == "Central Pacific Coast" ~ "77",
+                                       areaname == "Georges Bank" ~ "21",
+                                       areaname == "Gulf of Maine" ~ "21",
+                                       areaname == "Northwestern Atlantic Coast" ~ "21",
+                                       areaname == "Prince William Sound" ~ "67",
+                                       areaname == "Sitka" ~ "67",
+                                       areaname == "Togiak District" ~ "67",
+                                       areaname == "Southern New England" ~ "21",
+                                       areaname == "Atlantic" ~ "21;31",
+                                       areaname == "Gulf of Maine / Northern Georges Bank" ~ "21",
+                                       areaname == "Southern Georges Bank / Mid-Atlantic" ~ "21", # check
+                                       areaname == "Eastern Bering Sea and Aleutian Islands" ~ "61;67",
+                                       areaname == "Aleutian Islands" ~ "61;67",
+                                       areaname == "Bering Sea" ~ "61;67",
+                                       areaname == "Northwestern Atlantic" ~ "21", # check
+                                       areaname == "Bristol Bay" ~ "67",
+                                       areaname == "Norton Sound" ~ "67",
+                                       areaname == "Eastern Bering Sea / Aleutian Islands / Gulf of Alaska" ~ "61;67",
+                                       areaname == "Georges Bank and Mid-Atlantic Bight" ~ "21",
+                                       areaname == "North Pacific" ~ "67",
+                                       areaname == "Southern New England /Mid Atlantic" ~ "21", #check
+                                       areaname == "Bogoslof" ~ "67",
+                                       areaname == "Eastern Bering Sea" ~ "61;67",
+                                       areaname == "Alaska" ~ "61;67",
+                                       areaname == "Cape Cod / Gulf of Maine" ~ "21",
+                                       TRUE ~ "NA"))
+```
+
+### Combine countries
+
+```{r}
+ram_fao_by_areaname <- ram_fao_by_areaname_australia %>%
+  bind_rows(ram_fao_by_areaname_multinational) %>%
+  bind_rows(ram_fao_by_areaname_russia) %>%
+  bind_rows(ram_fao_by_areaname_south_africa) %>%
+  bind_rows(ram_fao_by_areaname_usa)
+```
+
+## Apply to stock list 
+
+```{r}
+ram_stocks_spatial_areas_out <- ram_stocks_spatial_areas %>%
+  left_join(ram_fao_by_region, by = "region") %>%
+  left_join(ram_fao_by_country, by = "country") %>%
+  left_join(ram_fao_by_areaname, by = c("region", "country", "areaname", "stocklong")) %>%
+  mutate(fao_area = case_when(!is.na(region_fao_area) ~ region_fao_area,
+                              !is.na(country_fao_area) ~ country_fao_area,
+                              TRUE ~ areaname_fao_area)) %>%
+  dplyr::select(stockid, fao_area)
+
+write_csv(ram_stocks_spatial_areas_out, "fao_areas_for_ram_stocks_v4.491.csv")
+
+```
+
