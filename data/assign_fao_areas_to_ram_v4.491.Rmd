@@ -331,6 +331,5 @@ ram_stocks_spatial_areas_out <- ram_stocks_spatial_areas %>%
   dplyr::select(stockid, fao_area)
 
 write_csv(ram_stocks_spatial_areas_out, "fao_areas_for_ram_stocks_v4.491.csv")
-
 ```
 
